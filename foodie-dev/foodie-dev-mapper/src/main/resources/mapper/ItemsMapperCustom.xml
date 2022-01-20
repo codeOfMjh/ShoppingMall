@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.mjh.mapper.ItemsMapperCustom">
+    <!--实现商品评论详情查询-->
+    <select id="queryItemComments" parameterType="map" resultType="com.mjh.pojo.vo.ItemCommentVO">
+        select
+          ics.`comment_level` commentLevel,
+          ics.`content` content,
+          ics.`sepc_name` specName,
+          ics.`created_time` createdTime,
+          u.`face` userFace,
+          u.`nickname` nickname
+        from
+          items_comments ics
+        left join
+          users u
+        on
+          ics.`user_id` = u.`id`
+        where
+          ics.`item_id` = #{paramsMap.itemId}
+        <if test="paramsMap.level != null and paramsMap.level !=''">
+            and ics.`comment_level` = #{paramsMap.level}
+        </if>
+    </select>
+
+    <!--实现商品搜索展示-->
+    <!--
+        1.k是默认排序，即按照名称排序—keyword
+        2.c是按照销量排序—counts
+        3.p是按照价格排序—price
+    -->
+    <select id="searchItems" parameterType="map" resultType="com.mjh.pojo.vo.SearchItemsVO">
+        select
+          i.`id` itemId,
+          i.`item_name` itemName,
+          i.`sell_counts` sellCounts,
+          ii.`url` imgUrl,
+          t.price_discount price
+        from
+          items i
+        left join
+          items_img ii
+        on
+          i.`id` = ii.`item_id`
+        left join
+          (
+            select
+              item_id,
+              min(price_discount) price_discount
+            from
+              items_spec
+            group by
+              item_id
+          ) t
+        on
+          i.`id` = t.item_id
+        where
+          ii.`is_main` = 1
+        <if test="paramsMap.keywords != null and paramsMap.keywords !=''">
+            and i.`item_name` like '%${paramsMap.keywords}%'
+        </if>
+        order by
+        <choose>
+            <when test="paramsMap.sort == &quot;c&quot;">
+                i.`sell_counts` desc
+            </when>
+            <when test="paramsMap.sort == &quot;p&quot;">
+                t.price_discount asc
+            </when>
+            <otherwise>
+                i.`item_name` asc
+            </otherwise>
+        </choose>
+    </select>
+
+    <!--根据三级分类名称查询商品详情-->
+    <select id="searchItemsByThirdCategory" parameterType="map" resultType="com.mjh.pojo.vo.SearchItemsVO">
+        select
+            i.`id` itemId,
+            i.`item_name` itemName,
+            i.`sell_counts` sellCounts,
+            ii.`url` imgUrl,
+            t.price_discount price
+        from
+            items i
+        left join items_img ii
+        on i.`id` = ii.`item_id`
+        left join
+        (select
+            item_id,
+        min(price_discount) price_discount
+        from
+            items_spec
+        group by item_id) t
+        on i.`id` = t.item_id
+        where ii.`is_main` = 1
+        and i.cat_id = #{paramsMap.catId}
+        order by
+        <choose>
+            <when test="paramsMap.sort == &quot;c&quot;">
+                i.`sell_counts` desc
+            </when>
+            <when test="paramsMap.sort == &quot;p&quot;">
+                t.price_discount asc
+            </when>
+            <otherwise>
+                i.`item_name` asc
+            </otherwise>
+        </choose>
+    </select>
+
+    <!--根据用户Id返回最新购物车数据-->
+    <select id="queryItemsBySpecIds" parameterType="list" resultType="com.mjh.pojo.vo.ShopCartVO">
+        select
+            i.`id` itemId,
+            ii.`url` itemImgUrl,
+            i.`item_name` itemName,
+            isp.`id` specId,
+            isp.`name` specName,
+            isp.`price_discount` priceDiscount,
+            isp.`price_normal`  priceNormal
+        from
+            items_spec isp
+        left join items i
+        on i.`id` = isp.`item_id`
+        left join items_img ii
+        on i.`id` = ii.`item_id`
+        where ii.`is_main` = 1
+        and isp.`id`in
+        <foreach collection="paramList" index="index" item="specId" open="(" separator="," close=")">
+            #{specId}
+        </foreach>
+    </select>
+
+    <!--乐观锁解决单体应用超卖问题-->
+    <update id="decreaseItemSpecStock">
+        update
+          items_spec
+        set
+          stock = stock - #{pendingCounts}
+        where
+          id = #{specId}
+        and
+          stock >= #{pendingCounts}
+    </update>
+</mapper>
+
+
+
+
